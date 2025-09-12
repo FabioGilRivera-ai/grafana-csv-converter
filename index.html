@@ -1,0 +1,458 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Grafana CSV Converter</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .container {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            padding: 40px;
+            max-width: 600px;
+            width: 100%;
+            text-align: center;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 30px;
+            font-size: 2.5em;
+        }
+
+        .url-input {
+            width: 100%;
+            padding: 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 10px;
+            font-size: 16px;
+            margin-bottom: 20px;
+            transition: border-color 0.3s ease;
+        }
+
+        .url-input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .buttons {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            justify-content: center;
+        }
+
+        .btn {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 25px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.3);
+            min-width: 160px;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .btn.csv {
+            background: linear-gradient(45deg, #28a745, #20c997);
+        }
+
+        .btn.json {
+            background: linear-gradient(45deg, #007bff, #6f42c1);
+        }
+
+        .loading {
+            display: none;
+            margin: 20px 0;
+        }
+
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .status {
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            font-weight: bold;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .presets {
+            margin-bottom: 20px;
+        }
+
+        .preset-btn {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 8px 15px;
+            margin: 5px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s ease;
+        }
+
+        .preset-btn:hover {
+            background: #e9ecef;
+            border-color: #adb5bd;
+        }
+
+        .info {
+            background: #e7f3ff;
+            border: 1px solid #b8daff;
+            color: #004085;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            text-align: left;
+            font-size: 14px;
+        }
+
+        .footer {
+            margin-top: 30px;
+            color: #666;
+            font-size: 14px;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                padding: 20px;
+            }
+            
+            .buttons {
+                flex-direction: column;
+            }
+            
+            .btn {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📊 Grafana CSV Converter</h1>
+        
+        <div class="presets">
+            <p style="margin-bottom: 15px; color: #666;">URLs predefinidas:</p>
+            <button class="preset-btn" onclick="setPresetUrl('service_comparison_20250911')">
+                Service Comparison
+            </button>
+            <button class="preset-btn" onclick="setPresetUrl('custom')">
+                Personalizada
+            </button>
+        </div>
+
+        <input type="text" 
+               id="apiUrl" 
+               class="url-input" 
+               placeholder="Ingresa la URL de la API de Grafana..."
+               value="https://grafanapd.siigolatam.com/api/datasources/proxy/uid/api-tools/json/service_comparison_20250911">
+
+        <div class="buttons">
+            <button class="btn csv" onclick="downloadCSV()">
+                📊 Descargar CSV
+            </button>
+            <button class="btn json" onclick="downloadJSON()">
+                📄 Descargar JSON
+            </button>
+        </div>
+
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+            <p>Descargando datos...</p>
+        </div>
+
+        <div id="status"></div>
+
+        <div class="info">
+            <h4>📋 Instrucciones:</h4>
+            <ol style="margin-left: 20px; margin-top: 10px;">
+                <li>Ingresa la URL completa de tu API de Grafana</li>
+                <li>Haz clic en "Descargar CSV" para convertir automáticamente</li>
+                <li>O "Descargar JSON" para obtener los datos originales</li>
+                <li>El archivo se descargará automáticamente a tu computadora</li>
+            </ol>
+        </div>
+
+        <div class="footer">
+            <p>🚀 Powered by GitHub Pages | Compatible con Grafana API</p>
+        </div>
+    </div>
+
+    <script>
+        // URLs predefinidas
+        const presetUrls = {
+            'service_comparison_20250911': 'https://grafanapd.siigolatam.com/api/datasources/proxy/uid/api-tools/json/service_comparison_20250911',
+            'custom': ''
+        };
+
+        function setPresetUrl(preset) {
+            const input = document.getElementById('apiUrl');
+            if (preset === 'custom') {
+                input.value = '';
+                input.focus();
+            } else {
+                input.value = presetUrls[preset] || '';
+            }
+        }
+
+        function showLoading(show = true) {
+            const loading = document.getElementById('loading');
+            const buttons = document.querySelectorAll('.btn');
+            
+            loading.style.display = show ? 'block' : 'none';
+            buttons.forEach(btn => btn.disabled = show);
+        }
+
+        function showStatus(message, type = 'success') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.className = `status ${type}`;
+            statusDiv.textContent = message;
+            statusDiv.style.display = 'block';
+            
+            setTimeout(() => {
+                statusDiv.style.display = 'none';
+            }, 5000);
+        }
+
+        async function fetchData(url) {
+            try {
+                const response = await fetch(url);
+                
+                if (!response.ok) {
+                    throw new Error(`Error HTTP: ${response.status} ${response.statusText}`);
+                }
+                
+                const data = await response.json();
+                return data;
+            } catch (error) {
+                if (error.name === 'TypeError' && error.message.includes('fetch')) {
+                    throw new Error('Error de CORS o red. Verifica que la URL sea accesible públicamente.');
+                }
+                throw error;
+            }
+        }
+
+        function convertToCSV(data) {
+            let csvData = [];
+            
+            // Manejar diferentes formatos de respuesta de Grafana
+            if (Array.isArray(data)) {
+                csvData = data;
+            } else if (data.data && Array.isArray(data.data)) {
+                csvData = data.data;
+            } else if (data.results && Array.isArray(data.results)) {
+                csvData = data.results;
+            } else if (data.series && Array.isArray(data.series)) {
+                // Convertir series de tiempo
+                csvData = [];
+                data.series.forEach(serie => {
+                    if (serie.datapoints && Array.isArray(serie.datapoints)) {
+                        serie.datapoints.forEach(([value, timestamp]) => {
+                            csvData.push({
+                                series: serie.name || 'unknown',
+                                value: value,
+                                timestamp: new Date(timestamp).toISOString()
+                            });
+                        });
+                    }
+                });
+            } else {
+                // Objeto simple - convertir a array de clave-valor
+                csvData = Object.entries(data).map(([key, value]) => ({
+                    campo: key,
+                    valor: value
+                }));
+            }
+
+            if (!csvData || csvData.length === 0) {
+                return 'Campo,Valor\nNo data,available';
+            }
+
+            // Obtener todas las columnas únicas
+            const allKeys = new Set();
+            csvData.forEach(item => {
+                if (typeof item === 'object' && item !== null) {
+                    Object.keys(item).forEach(key => allKeys.add(key));
+                }
+            });
+
+            const headers = Array.from(allKeys);
+            
+            // Crear CSV
+            let csv = headers.join(',') + '\n';
+            
+            csvData.forEach(row => {
+                const values = headers.map(header => {
+                    let value = row[header];
+                    
+                    if (value === null || value === undefined) {
+                        return '';
+                    }
+                    
+                    // Convertir a string y escapar
+                    value = String(value);
+                    
+                    // Si contiene comas, comillas o saltos de línea, envolver en comillas
+                    if (value.includes(',') || value.includes('"') || value.includes('\n')) {
+                        return `"${value.replace(/"/g, '""')}"`;
+                    }
+                    
+                    return value;
+                });
+                
+                csv += values.join(',') + '\n';
+            });
+
+            return csv;
+        }
+
+        function downloadFile(content, fileName, contentType) {
+            const blob = new Blob([content], { type: contentType });
+            const url = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            window.URL.revokeObjectURL(url);
+        }
+
+        function generateFileName(baseUrl, extension) {
+            try {
+                const url = new URL(baseUrl);
+                const pathParts = url.pathname.split('/').filter(part => part);
+                const baseName = pathParts[pathParts.length - 1] || 'grafana_export';
+                const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+                return `${baseName}_${timestamp}.${extension}`;
+            } catch {
+                const timestamp = new Date().toISOString().slice(0, 19).replace(/:/g, '-');
+                return `grafana_export_${timestamp}.${extension}`;
+            }
+        }
+
+        async function downloadCSV() {
+            const url = document.getElementById('apiUrl').value.trim();
+            
+            if (!url) {
+                showStatus('Por favor ingresa una URL válida', 'error');
+                return;
+            }
+
+            showLoading(true);
+            
+            try {
+                const data = await fetchData(url);
+                const csv = convertToCSV(data);
+                const fileName = generateFileName(url, 'csv');
+                
+                downloadFile(csv, fileName, 'text/csv;charset=utf-8');
+                showStatus(`✅ CSV descargado exitosamente: ${fileName}`, 'success');
+                
+            } catch (error) {
+                console.error('Error:', error);
+                showStatus(`❌ Error al descargar CSV: ${error.message}`, 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        async function downloadJSON() {
+            const url = document.getElementById('apiUrl').value.trim();
+            
+            if (!url) {
+                showStatus('Por favor ingresa una URL válida', 'error');
+                return;
+            }
+
+            showLoading(true);
+            
+            try {
+                const data = await fetchData(url);
+                const jsonString = JSON.stringify(data, null, 2);
+                const fileName = generateFileName(url, 'json');
+                
+                downloadFile(jsonString, fileName, 'application/json');
+                showStatus(`✅ JSON descargado exitosamente: ${fileName}`, 'success');
+                
+            } catch (error) {
+                console.error('Error:', error);
+                showStatus(`❌ Error al descargar JSON: ${error.message}`, 'error');
+            } finally {
+                showLoading(false);
+            }
+        }
+
+        // Permitir Enter para descargar CSV
+        document.getElementById('apiUrl').addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                downloadCSV();
+            }
+        });
+
+        // Mostrar mensaje inicial
+        window.addEventListener('load', function() {
+            showStatus('🚀 Convertidor listo para usar', 'success');
+        });
+    </script>
+</body>
+</html>

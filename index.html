@@ -275,18 +275,57 @@
 
         async function fetchData(url) {
             try {
-                const response = await fetch(url);
+                // Lista de proxies gratuitos para evitar CORS
+                const proxies = [
+                    'https://api.allorigins.win/get?url=',
+                    'https://corsproxy.io/?',
+                    'https://cors-anywhere.herokuapp.com/',
+                    'https://thingproxy.freeboard.io/fetch/'
+                ];
                 
-                if (!response.ok) {
-                    throw new Error(`Error HTTP: ${response.status} ${response.statusText}`);
+                let lastError = null;
+                
+                // Intentar primero sin proxy (por si funciona directamente)
+                try {
+                    const directResponse = await fetch(url);
+                    if (directResponse.ok) {
+                        return await directResponse.json();
+                    }
+                } catch (directError) {
+                    console.log('Acceso directo falló, probando con proxies...');
                 }
                 
-                const data = await response.json();
-                return data;
+                // Probar cada proxy
+                for (const proxy of proxies) {
+                    try {
+                        let proxyUrl;
+                        let response;
+                        
+                        if (proxy.includes('allorigins')) {
+                            proxyUrl = `${proxy}${encodeURIComponent(url)}`;
+                            response = await fetch(proxyUrl);
+                            if (response.ok) {
+                                const data = await response.json();
+                                return JSON.parse(data.contents);
+                            }
+                        } else {
+                            proxyUrl = `${proxy}${url}`;
+                            response = await fetch(proxyUrl);
+                            if (response.ok) {
+                                return await response.json();
+                            }
+                        }
+                    } catch (error) {
+                        lastError = error;
+                        console.log(`Proxy ${proxy} falló:`, error.message);
+                        continue;
+                    }
+                }
+                
+                throw new Error('Todos los proxies fallaron. La URL puede requerir autenticación o no ser accesible públicamente.');
+                
             } catch (error) {
-                if (error.name === 'TypeError' && error.message.includes('fetch')) {
-                    throw new Error('Error de CORS o red. Verifica que la URL sea accesible públicamente.');
-                }
+                console.error('Error en fetchData:', error);
                 throw error;
             }
         }
